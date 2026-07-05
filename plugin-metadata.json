@@ -1,7 +1,7 @@
 {
   "name": "Klipy GIF Search",
-  "version": "1.0.4",
-  "description": "Search GIFs with floating picker overlay above textbox",
+  "version": "1.1.0",
+  "description": "Search GIFs and send Klipy share links that render inline",
   "author": "litruv",
   "homepage": "https://github.com/paarrot/plugins",
   "thumbnail": "https://i.imgur.com/DADe9S8.png",
