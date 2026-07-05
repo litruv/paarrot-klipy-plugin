@@ -182,9 +182,34 @@ module.exports = {
       return resolved;
     }
 
+    function LucideLinkIcon({ size = 14, color = 'currentColor' }) {
+      return React.createElement(
+        'svg',
+        {
+          xmlns: 'http://www.w3.org/2000/svg',
+          width: size,
+          height: size,
+          viewBox: '0 0 24 24',
+          fill: 'none',
+          stroke: color,
+          strokeWidth: 2,
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+          'aria-hidden': true,
+        },
+        React.createElement('path', {
+          d: 'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71',
+        }),
+        React.createElement('path', {
+          d: 'M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71',
+        })
+      );
+    }
+
     function KlipyEmbed({ link }) {
       const [media, setMedia] = React.useState(null);
       const [failed, setFailed] = React.useState(false);
+      const [hovered, setHovered] = React.useState(false);
 
       React.useEffect(() => {
         let cancelled = false;
@@ -227,16 +252,20 @@ module.exports = {
         'div',
         {
           style: {
+            position: 'relative',
             display: 'inline-block',
             maxWidth: 'min(420px, 100%)',
             marginTop: '4px',
           },
+          onMouseEnter: () => setHovered(true),
+          onMouseLeave: () => setHovered(false),
         },
         React.createElement('img', {
           src: media.mediaUrl,
           alt: media.title,
           title: media.title,
           loading: 'lazy',
+          onError: () => setFailed(true),
           style: {
             display: 'block',
             maxWidth: '100%',
@@ -250,15 +279,30 @@ module.exports = {
             href: media.shareUrl,
             target: '_blank',
             rel: 'noopener noreferrer',
+            title: 'Open on Klipy',
+            'aria-label': 'Open on Klipy',
+            onClick: (event) => event.stopPropagation(),
             style: {
-              display: 'inline-block',
-              marginTop: '6px',
-              fontSize: '12px',
-              color: '#8b8bf9',
+              position: 'absolute',
+              top: '8px',
+              right: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '28px',
+              height: '28px',
+              borderRadius: '6px',
+              border: 'none',
+              background: 'rgba(0, 0, 0, 0.62)',
+              color: '#fff',
               textDecoration: 'none',
+              opacity: hovered ? 1 : 0,
+              pointerEvents: hovered ? 'auto' : 'none',
+              transition: 'opacity 0.15s ease',
+              backdropFilter: 'blur(4px)',
             },
           },
-          media.shareUrl
+          React.createElement(LucideLinkIcon, { size: 14, color: '#fff' })
         )
       );
     }
