@@ -7,6 +7,7 @@ module.exports = {
     const API_KEY = 'Qn0Whvr0vXSySgxfQRr28Vnlv0hQVvMEfXL1hiBvCV7demCrrCdALvnI1aUU4QO4';
     const BASE_URL = 'https://api.klipy.com';
     const React = ctx.React;
+    const { Link: LinkIcon } = ctx.lucide;
 
     let currentRoomId = null;
     let pickerContainer = null;
@@ -182,30 +183,6 @@ module.exports = {
       return resolved;
     }
 
-    function LucideLinkIcon({ size = 14, color = 'currentColor' }) {
-      return React.createElement(
-        'svg',
-        {
-          xmlns: 'http://www.w3.org/2000/svg',
-          width: size,
-          height: size,
-          viewBox: '0 0 24 24',
-          fill: 'none',
-          stroke: color,
-          strokeWidth: 2,
-          strokeLinecap: 'round',
-          strokeLinejoin: 'round',
-          'aria-hidden': true,
-        },
-        React.createElement('path', {
-          d: 'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71',
-        }),
-        React.createElement('path', {
-          d: 'M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71',
-        })
-      );
-    }
-
     function KlipyEmbed({ link }) {
       const [media, setMedia] = React.useState(null);
       const [failed, setFailed] = React.useState(false);
@@ -302,9 +279,39 @@ module.exports = {
               backdropFilter: 'blur(4px)',
             },
           },
-          React.createElement(LucideLinkIcon, { size: 14, color: '#fff' })
+          React.createElement(LinkIcon, { size: 14, color: '#fff', strokeWidth: 2, 'aria-hidden': true })
         )
       );
+    }
+
+    function getActiveRoomId() {
+      if (currentRoomId) {
+        return currentRoomId;
+      }
+
+      try {
+        let pathname = window.location.pathname;
+        if (window.location.hash) {
+          const hashMatch = window.location.hash.match(/#(.+)/);
+          if (hashMatch) {
+            pathname = hashMatch[1];
+          }
+        }
+
+        const patterns = [/^\/home\/([^/]+)/, /^\/direct\/([^/]+)/, /^\/[^/]+\/([^/]+)/];
+        for (const pattern of patterns) {
+          const match = pathname.match(pattern);
+          if (match?.[1]) {
+            const idOrAlias = decodeURIComponent(match[1]);
+            const room = ctx.matrixClient?.getRoom?.(idOrAlias);
+            return room?.roomId ?? idOrAlias;
+          }
+        }
+      } catch (error) {
+        ctx.warn('Failed to resolve active room from URL:', error);
+      }
+
+      return null;
     }
 
     function createPickerOverlay() {
@@ -330,33 +337,9 @@ module.exports = {
       return pickerContainer;
     }
 
-    function showPicker(gifResults, query) {
-      const container = createPickerOverlay();
-      container.style.display = 'block';
-      container.replaceChildren();
-
-      const header = document.createElement('div');
-      header.style.cssText =
-        'padding: 12px; background: #2a2a2a; border-bottom: 1px solid #444; display: flex; justify-content: space-between; align-items: center;';
-
-      const title = document.createElement('div');
-      title.style.cssText = 'font-weight: 600; color: #fff;';
-      title.textContent = `GIFs for "${query}" (${gifResults.length})`;
-      header.appendChild(title);
-
-      const closeButton = document.createElement('button');
-      closeButton.type = 'button';
-      closeButton.textContent = '×';
-      closeButton.style.cssText =
-        'background: transparent; border: none; color: #aaa; cursor: pointer; font-size: 20px;';
-      closeButton.addEventListener('click', () => {
-        container.style.display = 'none';
-      });
-      header.appendChild(closeButton);
-
+    function buildResultsGrid(gifResults) {
       const grid = document.createElement('div');
-      grid.style.cssText =
-        'padding: 12px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-height: 340px; overflow-y: auto;';
+      grid.style.cssText = 'display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;';
 
       gifResults.slice(0, 12).forEach((gifData) => {
         const previewUrl = getPreviewUrl(gifData);
@@ -374,8 +357,22 @@ module.exports = {
           item.style.transform = 'scale(1)';
         });
         item.addEventListener('click', async () => {
-          await sendGifToRoom(currentRoomId, gifData);
-          container.style.display = 'none';
+          try {
+            const roomId = getActiveRoomId();
+            if (!roomId) {
+              setPickerBodyMessage(
+                document.querySelector('.klipy-picker-body'),
+                'Open a room before sending a GIF',
+                '#f87171'
+              );
+              return;
+            }
+            currentRoomId = roomId;
+            await sendGifToRoom(roomId, gifData);
+            if (pickerContainer) pickerContainer.style.display = 'none';
+          } catch (error) {
+            ctx.error('Failed to send GIF:', error);
+          }
         });
 
         if (previewUrl) {
@@ -402,8 +399,110 @@ module.exports = {
         grid.appendChild(item);
       });
 
+      return grid;
+    }
+
+    function setPickerBodyMessage(body, message, color = '#888') {
+      body.replaceChildren();
+      const el = document.createElement('div');
+      el.style.cssText = `color: ${color}; text-align: center; padding: 24px; font-size: 13px;`;
+      el.textContent = message;
+      body.appendChild(el);
+    }
+
+    function openGifPicker(initialQuery = '', preloadedResults = null) {
+      const container = createPickerOverlay();
+      container.style.display = 'block';
+      container.replaceChildren();
+
+      const header = document.createElement('div');
+      header.style.cssText =
+        'padding: 12px; background: #2a2a2a; border-bottom: 1px solid #444; display: flex; gap: 8px; align-items: center;';
+
+      const searchInput = document.createElement('input');
+      searchInput.type = 'search';
+      searchInput.placeholder = 'Search GIFs...';
+      searchInput.value = initialQuery;
+      searchInput.autocomplete = 'off';
+      searchInput.style.cssText =
+        'flex: 1; padding: 8px 12px; border-radius: 6px; border: 1px solid #444; background: #1a1a1a; color: #fff; font-size: 14px; outline: none;';
+
+      const closeButton = document.createElement('button');
+      closeButton.type = 'button';
+      closeButton.title = 'Close';
+      closeButton.setAttribute('aria-label', 'Close GIF picker');
+      closeButton.style.cssText =
+        'background: transparent; border: none; color: #aaa; cursor: pointer; font-size: 20px; line-height: 1; padding: 4px;';
+      closeButton.textContent = '×';
+      closeButton.addEventListener('click', () => {
+        container.style.display = 'none';
+      });
+
+      const body = document.createElement('div');
+      body.className = 'klipy-picker-body';
+      body.style.cssText = 'padding: 12px; max-height: 340px; overflow-y: auto; min-height: 140px;';
+
+      let searchTimer = null;
+
+      const runSearch = async () => {
+        const query = searchInput.value.trim();
+        if (!query) {
+          setPickerBodyMessage(body, 'Search for a GIF to get started');
+          return;
+        }
+
+        setPickerBodyMessage(body, 'Searching...', '#9ca3af');
+
+        try {
+          const results = await searchGifs(query);
+          body.replaceChildren();
+
+          if (!results) {
+            setPickerBodyMessage(body, `No GIFs found for "${query}"`);
+            return;
+          }
+
+          body.appendChild(buildResultsGrid(results));
+        } catch (error) {
+          ctx.error('GIF search error:', error);
+          setPickerBodyMessage(body, error.message || 'Search failed', '#f87171');
+        }
+      };
+
+      searchInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          if (searchTimer) clearTimeout(searchTimer);
+          runSearch();
+        }
+        if (event.key === 'Escape') {
+          container.style.display = 'none';
+        }
+      });
+
+      searchInput.addEventListener('input', () => {
+        if (searchTimer) clearTimeout(searchTimer);
+        searchTimer = setTimeout(runSearch, 350);
+      });
+
+      header.appendChild(searchInput);
+      header.appendChild(closeButton);
       container.appendChild(header);
-      container.appendChild(grid);
+      container.appendChild(body);
+
+      window.setTimeout(() => searchInput.focus(), 0);
+
+      if (preloadedResults) {
+        body.replaceChildren();
+        body.appendChild(buildResultsGrid(preloadedResults));
+        return;
+      }
+
+      if (initialQuery.trim()) {
+        runSearch();
+      } else {
+        setPickerBodyMessage(body, 'Search for a GIF to get started');
+      }
     }
 
     async function searchGifs(query) {
@@ -504,21 +603,14 @@ module.exports = {
           }
 
           if (!roomId) {
-            roomId = currentRoomId;
-            if (!roomId && ctx.matrixClient) {
-              const rooms = ctx.matrixClient.getRooms();
-              if (rooms?.length) {
-                roomId = rooms[rooms.length - 1].roomId;
-                currentRoomId = roomId;
-              }
-            }
+            roomId = getActiveRoomId();
             if (!roomId) {
-              return 'Cannot determine room. Send a message first.';
+              return 'Cannot determine room. Open a room first.';
             }
           }
 
           currentRoomId = roomId;
-          showPicker(results, query);
+          openGifPicker(query, results);
           return null;
         } catch (error) {
           ctx.error('GIF search error:', error);
@@ -531,31 +623,20 @@ module.exports = {
       id: 'klipy-gif-picker',
       location: 'text-composer-toolbar',
       label: 'GIF',
-      icon: 'GIF',
+      icon: 'lucide:ImagePlay',
       position: {
         after: 'emoji-picker-button',
         group: 'klipy',
         order: 1,
       },
-      onClick: async () => {
-        const query = window.prompt('Search GIFs');
-        if (!query?.trim()) return;
-
-        try {
-          const results = await searchGifs(query.trim());
-          if (!results) {
-            window.alert(`No GIFs for "${query.trim()}"`);
-            return;
-          }
-          if (!currentRoomId) {
-            window.alert('Cannot determine room. Send a message first.');
-            return;
-          }
-          showPicker(results, query.trim());
-        } catch (error) {
-          ctx.error('GIF picker error:', error);
-          window.alert(`GIF search failed: ${error.message}`);
+      onClick: () => {
+        const roomId = getActiveRoomId();
+        if (!roomId) {
+          ctx.warn('Cannot open GIF picker: no active room');
+          return;
         }
+        currentRoomId = roomId;
+        openGifPicker();
       },
     });
   },
