@@ -58,14 +58,14 @@ module.exports = {
       const formats = gifData.media_formats;
       if (formats) {
         return (
-          formats.nanogifpreview?.url ||
-          formats.tinygifpreview?.url ||
-          formats.gifpreview?.url ||
-          formats.preview?.url ||
           formats.nanogif?.url ||
           formats.tinygif?.url ||
           formats.mediumgif?.url ||
-          formats.gif?.url
+          formats.gif?.url ||
+          formats.nanogifpreview?.url ||
+          formats.tinygifpreview?.url ||
+          formats.gifpreview?.url ||
+          formats.preview?.url
         );
       }
 
