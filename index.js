@@ -322,7 +322,7 @@ module.exports = {
           position: fixed;
           bottom: 80px;
           right: 20px;
-          width: 500px;
+          width: min(500px, calc(100vw - 40px));
           max-height: 400px;
           background: #1e1e1e;
           border: 1px solid #444;
